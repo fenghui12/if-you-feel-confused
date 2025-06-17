@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 助理</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-main">
+                <h1>AI 助理</h1>
+                <div class="header-buttons">
+                    <button id="settings-btn" class="settings-btn">⚙️ 设置</button>
+                    <button id="clear-history-btn" class="clear-btn">🗑️ 清空记录</button>
+                </div>
+            </div>
+            <div class="mode-selector">
+                <label for="chat-mode">选择模式:</label>
+                <select id="chat-mode">
+                    <!-- 专家列表将由 JavaScript 动态加载 -->
+                </select>
+            </div>
+        </header>
+        <div class="chat-window" id="chat-window">
+            <!-- 聊天消息将由 JavaScript 动态插入这里 -->
+        </div>
+        <footer class="chat-input-area">
+            <form id="chat-form">
+                <input type="text" id="message-input" placeholder="输入你的消息..." autocomplete="off" required>
+                <button type="submit">发送</button>
+            </form>
+        </footer>
+    </div>
+
+    <!-- 人设补全弹窗 (默认隐藏) -->
+    <div id="persona-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <!-- 视图 1: 处理必要提问 -->
+            <div id="modal-question-view">
+                <h2 id="modal-title-question">人设补全</h2>
+                <p id="modal-question-text">为了更好地帮助您，我需要了解更多信息：</p>
+                <form id="persona-form">
+                    <textarea id="persona-input" rows="4" placeholder="请输入您的回答..."></textarea>
+                    <div class="modal-actions">
+                        <button type="button" class="modal-cancel">以后再说</button>
+                        <button type="submit" id="modal-submit-initial">提炼并预览</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 视图 2: 确认提炼结果 (用于必要提问后) -->
+            <div id="modal-confirmation-view" style="display: none;">
+                <h2>请确认人设信息</h2>
+                <p>根据您的回答，我为您总结了以下人设信息：</p>
+                <div class="processed-text-box">
+                    <p id="processed-text-content"></p>
+                </div>
+                <p>是否将此条信息加入您的核心人设中？</p>
+                <div class="modal-actions">
+                    <button type="button" id="modal-retry">重新回答</button>
+                    <button type="button" id="modal-confirm-update">确认添加</button>
+                </div>
+            </div>
+
+            <!-- 视图 3: 确认洞察建议 -->
+            <div id="modal-suggestion-view" style="display: none;">
+                <h2 id="modal-title-suggestion">人设更新建议</h2>
+                <p id="modal-suggestion-text">根据我们的对话，我发现了一个可以补充到您人设中的信息点：</p>
+                 <div class="processed-text-box">
+                    <p id="suggestion-text-content"></p>
+                </div>
+                <p>是否将此条信息加入您的核心人设中？</p>
+                <div class="modal-actions">
+                    <button type="button" class="modal-cancel">忽略</button>
+                    <button type="button" id="modal-confirm-suggestion">确认添加</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 清空确认弹窗 (默认隐藏) -->
+    <div id="clear-history-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div id="modal-initial-view">
+                <h2>确认操作</h2>
+                <p>确定要清空当前专家的所有聊天记录吗？</p>
+                <p class="warning-text">此操作无法恢复！</p>
+                <div class="modal-actions">
+                    <button type="button" id="clear-cancel-btn">取消</button>
+                    <button type="button" id="clear-confirm-btn">确认清空</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置弹窗 (默认隐藏) -->
+    <div id="settings-modal" class="modal-overlay" style="display: none;">
+        <div class="settings-modal-content">
+            <div class="settings-modal-header">
+                <h2>设置</h2>
+                <div class="modal-actions">
+                    <button type="button" id="settings-cancel-btn">取消</button>
+                    <button type="button" id="settings-save-btn">保存设置</button>
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <h3>核心人设</h3>
+                <textarea id="persona-setting-input" rows="5" placeholder="在此处编辑您的核心人设..."></textarea>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-header">
+                    <h3>专家管理</h3>
+                    <button type="button" id="add-expert-btn" class="btn-add">＋ 新增专家</button>
+                </div>
+                <div id="experts-list">
+                    <!-- 专家配置将由JS动态插入此处 -->
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="/static/script.js?v=1.6"></script>
+</body>
+</html> 
