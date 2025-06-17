@@ -53,35 +53,91 @@ class ChatMessage(BaseModel):
     mode: str
 
 class ProcessPersonaRequest(BaseModel):
-    raw_info: str
+    question: str
+    answer: str
 
 class Config(BaseModel):
     base_persona: str
     experts: dict
 
+class PersonaUpdateRequest(BaseModel):
+    update_string: str
+
 
 # --- 系统提示 (System Prompts) ---
 CLARIFICATION_PROMPT = """
 ---
-【人设洞察与补全指令】
-你的核心任务是深入理解用户，并在对话中持续完善对他的认知。你拥有两种工具来更新用户人设：
-
-1.  **洞察建议 (Suggest Update)**:
-    -   **触发时机**: **严格地仅当用户的最新一条消息中**，包含了**新的、且在提供给你的"核心人设"中未被记录**的信息时，你才能使用此工具。
-    -   **判断依据**: 你必须将**用户的最新回复**作为**唯一**的判断依据。**严禁**根据你自己的回复、历史对话或已有的"核心人设"信息本身来提炼建议。这是一个发现"新大陆"的过程，而不是总结"已知地图"。
-    -   **行动**: 你**必须**在正常回答的结尾处，另起一行，并严格使用以下格式，提出一个陈述句建议：
-        `[SUGGEST_UPDATE]根据您提到的信息，我建议将"<提炼后的人设标签>"加入您的人设档案，可以吗？`
-    -   **例子**:
-        -   核心人设: (空) | 用户最新消息: "我周末要去学Python编程课。" -> LLM正常回复... `[SUGGEST_UPDATE]根据您提到的信息，我建议将"技能：正在学习Python"加入您的人设档案，可以吗？`
-        -   核心人设: "家庭情况：已育" | 用户最新消息: "我今天送我女儿上学迟到了。" -> (不触发，因为"已育"信息已存在)
-        -   核心人设: (任意) | 用户最新消息: "你好啊" -> (不触发，因为没有新信息)
-
-2.  **必要提问 (Ask for Clarification)**:
-    -   **时机**: **仅当**你认为缺少某个**关键信息**就**无法给出有意义的回答**时，才能使用此工具。这是一个**被动**技能，不能滥用。
-    -   **行动**: 在你的正常回答结尾处，另起一行，并严格使用以下格式提问：
-        `[ASK_FOR_CLARIFICATION]为了更好地规划您的理财，我需要了解您能接受的风险等级是高、中、还是低？`
-
-**核心原则**: 你的目标是成为一个聪明的倾听者，而不是一个健忘的复读机或一个盘问者。始终优先从用户的**新输入**中洞察信息。
+1. 核心身份与使命 (Core Identity & Mission)
+你是一个名为 "Echo" 的高级AI，专精于用户画像建模 (User Persona Modeling)。你的唯一使命是：通过对话，被动地、非侵入性地构建和维护一个关于用户的、动态更新的、事实驱动的画像。
+你的行为准则基于一条黄金法则：“多听，少问，精准记录”。
+2. 核心指令 (Core Directives)
+你必须无条件遵守以下规则：
+观察优先于盘问 (Observation Over Interrogation): 你的信息来源首选是用户主动给出的信息。[ASK_FOR_CLARIFICATION] 是在万不得已时才使用的最后手段。
+格式是绝对的 (Formatting is Absolute): 所有工具的输出必须严格遵循 [TAG]Content 的格式，前后绝不允许有任何多余的解释、前缀或后缀。
+最新消息原则 (Latest Message Principle): 你的所有洞察（[SUGGEST_UPDATE]）必须且只能基于用户的最新一条消息。不要回顾历史信息来做新的推断。
+只记录有效信息 (Meaningful Information Only): 只对构成用户画像的事实、偏好、目标、关系、重要事件等信息进行洞察。必须忽略日常闲聊、情绪表达或无具体信息的对话填充词（如“好的”、“嗯”）。
+原子化更新 (Atomic Updates): 每次 [SUGGEST_UPDATE] 只针对一个Key-Value对。如果用户一句话透露了多条信息，请分多行进行建议。
+3. 工具定义与工作流程 (Tools & Workflow)
+你在对话中拥有两个工具。在每次回复的结尾，根据以下逻辑决定是否使用它们。
+功能: 从用户最新消息中提炼画像信息，并建议新增或更新。
+触发条件: 当且仅当 (IF AND ONLY IF) 用户的最新一条消息中，包含可以明确提取为 Key: Value 形式的新画像信息，或与现有画像有冲突/可更新的信息。
+执行逻辑:
+扫描: 分析用户最新消息，寻找有效信息。
+比对: 检查该信息是否关联到“核心人设”中的已有Key。
+决策:
+更新 (Update): 若Key已存在，生成对该Key的新Value。
+新增 (Add): 若Key为全新领域，生成新的Key: Value对。
+行动: 在正常对话回复的末尾，另起一行，使用以下格式输出。
+格式与要求 (Strict Schema):
+格式: [SUGGEST_UPDATE]Key: Value
+Key: 必须是一个简短、标准化的名词（例如：职业, 爱好, 目标, 居住地）。禁止使用句子或描述性短语作为Key。
+Value: 必须是提炼后的客观信息。
+冒号: 必须是英文半角冒号 (:)，其后可跟一个空格。
+示例:
+场景1 (更新):
+核心人设: 体重: 100kg
+用户: "我最近健身，体重变成了90公斤。"
+你的回复: (正常对话...)
+[SUGGEST_UPDATE]体重: 90kg
+场景2 (新增):
+核心人设: (空)
+用户: "我周末要去学Python编程课。"
+你的回复: (正常对话...)
+[SUGGEST_UPDATE]技能学习: Python
+场景3 (不触发):
+核心人设: 姓名: 小王
+用户: "你好啊"
+你的回复: (正常对话，不附加任何工具)
+功能: 在信息不足以完成用户明确请求时，进行提问。
+触发条件: 当且仅当 (IF AND ONLY IF) 如果不获取一个特定的信息，就绝对无法对用户当前提出的具体问题给出任何有效步骤或建议时。
+执行逻辑:
+这是一个被动技能。绝不能为了“让回答更完美”或“出于好奇”而使用。如果能给出一个模糊或初步的回答，就不要提问。
+格式与要求 (Strict Schema):
+格式: [ASK_FOR_CLARIFICATION]问题正文
+行动: 在正常对话回复的末尾，另起一行，使用此格式。
+示例:
+场景1 (合法使用):
+用户: "帮我规划一个为期5年的理财计划。"
+你的回复: "好的，制定一个长期的理财计划非常棒。不过，计划的风格会因人而异。
+[ASK_FOR_CLARIFICATION]为了给您定制计划，我需要了解您能接受的风险等级是高、中、还是低？
+场景2 (非法使用):
+用户: "我今天心情不好。"
+你的回复 (错误示范): [ASK_FOR_CLARIFICATION]为什么心情不好呀？
+你的回复 (正确示范): "听到你这么说我很难过，希望你能尽快好起来。如果有什么我能帮忙的，随时告诉我。" (不使用工具)
+4. 高级用法：组合指令
+触发条件: 当用户的输入同时满足了 [SUGGEST_UPDATE] 和 [ASK_FOR_CLARIFICATION] 的触发条件时。
+执行原则: 你必须同时使用这两个工具，并遵循固定顺序。
+顺序: 总是先提问，后洞察。
+正常对话
+[ASK_FOR_CLARIFICATION]
+[SUGGEST_UPDATE]
+组合示例:
+核心人设: (空)
+用户: "我最近跟我女朋友闹矛盾了，我该怎么办？"
+你的回复:
+听到这个消息我感到很遗憾，感情中的矛盾确实很令人揪心。不同的矛盾需要不同的处理方式，如果能了解更多细节，我也许能提供更有针对性的建议。
+[ASK_FOR_CLARIFICATION]可以具体说说，是为什么事情闹矛盾吗？
+[SUGGEST_UPDATE]情感状况: 恋爱中
 ---
 """
 
@@ -111,14 +167,80 @@ async def get_config():
 @app.post("/api/config")
 async def update_config(config: Config):
     """更新并保存所有配置信息"""
-    # 从前端收到的配置已经是完整的，且提示词是干净的，直接保存
-    user_data = {
-        "base_persona": config.base_persona,
-        "experts": config.experts
-    }
-    # 不再将CLARIFICATION_PROMPT保存到文件中
+    # 这里需要采用"读取-修改-写入"模式，以保留聊天记录
+    user_data = load_user_data()
+
+    # 更新人设和专家配置
+    user_data["base_persona"] = config.base_persona
+    
+    # 更新专家信息，但保留历史记录
+    for expert_key, expert_data in config.experts.items():
+        if expert_key in user_data["experts"]:
+            user_data["experts"][expert_key]["name"] = expert_data["name"]
+            user_data["experts"][expert_key]["prompt"] = expert_data["prompt"]
+        else:
+            # 如果是新增的专家，初始化其数据结构
+            user_data["experts"][expert_key] = {
+                "name": expert_data["name"],
+                "prompt": expert_data["prompt"],
+                "history": []
+            }
+    
+    # 处理被删除的专家
+    # 创建一个当前配置中存在的专家键的集合
+    current_expert_keys = set(config.experts.keys())
+    # 创建一个需要删除的专家键的列表
+    deleted_expert_keys = [key for key in user_data["experts"] if key not in current_expert_keys]
+    # 删除这些专家
+    for key in deleted_expert_keys:
+        del user_data["experts"][key]
+
     save_user_data(user_data)
     return {"message": "配置更新成功"}
+
+@app.post("/api/persona/update")
+async def update_persona(request: PersonaUpdateRequest):
+    """处理单条人设的更新或新增"""
+    update_string = request.update_string.strip()
+    try:
+        # 按第一个冒号分割，确保Value中可以包含冒号
+        key_to_update, new_value = [part.strip() for part in update_string.split(":", 1)]
+    except ValueError:
+        # 如果格式不正确，则无法处理
+        raise HTTPException(status_code=400, detail="更新格式错误，必须为 'Key: Value'")
+
+    user_data = load_user_data()
+    # 用 .splitlines() 来正确处理各种换行符
+    persona_lines = user_data.get("base_persona", "").splitlines()
+    
+    updated = False
+    new_persona_lines = []
+    
+    # 遍历现有的每一条人设
+    for line in persona_lines:
+        stripped_line = line.strip()
+        if not stripped_line:
+            continue
+        try:
+            current_key, _ = [part.strip() for part in stripped_line.split(":", 1)]
+            if current_key.lower() == key_to_update.lower():
+                # 如果key匹配（不区分大小写），则更新该行
+                new_persona_lines.append(f"{key_to_update}: {new_value}")
+                updated = True
+            else:
+                new_persona_lines.append(line)
+        except ValueError:
+            # 保留那些不符合 "Key: Value" 格式的行
+            new_persona_lines.append(line)
+
+    # 如果遍历完后发现没有更新任何现有行，说明是新增
+    if not updated:
+        new_persona_lines.append(f"{key_to_update}: {new_value}")
+        
+    user_data["base_persona"] = "\n".join(new_persona_lines)
+    save_user_data(user_data)
+    
+    return {"message": "人设更新成功", "new_persona": user_data["base_persona"]}
 
 @app.post("/api/chat")
 async def chat(chat_message: ChatMessage):
@@ -157,29 +279,29 @@ async def chat(chat_message: ChatMessage):
         )
         
         raw_reply = response.choices[0].message.content
-        update_info = None
-        update_type = None
         
-        # 5. 检查是否触发了人设补全或建议
-        if "[ASK_FOR_CLARIFICATION]" in raw_reply:
-            parts = raw_reply.split("[ASK_FOR_CLARIFICATION]", 1)
+        reply = raw_reply
+        suggestion = None
+        question = None
+
+        # 5. 检查是否触发了建议和提问（可以同时触发）
+        if "[SUGGEST_UPDATE]" in reply:
+            parts = reply.split("[SUGGEST_UPDATE]", 1)
             reply = parts[0].strip()
-            update_info = parts[1].strip()
-            update_type = "question" # 这是一个问题
-        elif "[SUGGEST_UPDATE]" in raw_reply:
-            parts = raw_reply.split("[SUGGEST_UPDATE]", 1)
+            suggestion = parts[1].strip().split("[ASK_FOR_CLARIFICATION]")[0].strip()
+            
+        if "[ASK_FOR_CLARIFICATION]" in reply:
+            parts = reply.split("[ASK_FOR_CLARIFICATION]", 1)
             reply = parts[0].strip()
-            update_info = parts[1].strip()
-            update_type = "suggestion" # 这是一个建议
-        else:
-            reply = raw_reply.strip()
+            question = parts[1].strip()
 
         # 4. 保存对话历史
         history.append({"role": "user", "content": user_message})
-        history.append({"role": "assistant", "content": reply})
+        # 只保存纯粹的对话回复，不含标签
+        history.append({"role": "assistant", "content": reply}) 
         save_user_data(user_data)
 
-        return {"reply": reply, "update_info": update_info, "update_type": update_type}
+        return {"reply": reply, "suggestion": suggestion, "question": question}
 
     except openai.APIError as e:
         print(f"DeepSeek API Error: {e}")
@@ -208,29 +330,38 @@ async def clear_history(mode: str):
 
 @app.post("/api/process_persona_info")
 async def process_persona_info(request: ProcessPersonaRequest):
-    """接收用户口语化信息，调用LLM提炼成结构化人设"""
-    processing_prompt = """
-你是一位专业的人设档案分析师。你的任务是将用户用口语提供的个人信息，提炼成一句简洁、客观、书面化的第三人称事实陈述。
+    """接收AI的问题和用户的回答，提炼成结构化的 'Key: Value' 人设。"""
+    
+    processing_prompt = f"""
+你是一位专业的人设档案分析师。你的任务是将AI提出的问题和用户的口语化回答，提炼成一个简洁、客观的 "Key: Value" 格式的陈述。
+- Key应该是这个信息点的核心主题（例如：风险偏好, 职业, 爱好）。
+- Value是基于用户回答的总结。
 - 不要进行任何对话或反问。
-- 只输出提炼后的那一句核心事实。
+- 只输出最终的那一行 "Key: Value"。
 
-例子:
-用户输入: "嗯...我觉得我工作上可能还是更喜欢稳定一点的吧，不太想冒太大风险。"
-你的输出: 在职业选择上，倾向于工作的稳定性而非高风险高回报的机会。
+---
+AI 的问题: "{request.question}"
+用户的回答: "{request.answer}"
+---
 
-用户输入: "我周末就喜欢宅在家里看看电影打打游戏啥的，不太爱出去。"
-你的输出: 业余时间偏好居家活动，如看电影和玩游戏，而非外出社交。
+你的输出:
 """
     try:
         response = client.chat.completions.create(
             model="deepseek-chat",
             messages=[
                 {"role": "system", "content": processing_prompt},
-                {"role": "user", "content": request.raw_info}
             ],
-            temperature=0.3, # 使用较低的温度以获得更稳定、可预测的输出
+            temperature=0.3,
         )
         processed_text = response.choices[0].message.content.strip()
+        # 基本的格式验证
+        if ":" not in processed_text or len(processed_text.split(':')) != 2:
+            print(f"LLM未能生成有效的Key:Value格式，输出为: {processed_text}")
+            # 即使格式不理想，也尝试将其作为普通文本处理，而不是直接报错
+            # 这可以处理一些意外情况，例如LLM只返回了一个值
+            return {"processed_text": f"备注: {processed_text}"}
+
         return {"processed_text": processed_text}
     except Exception as e:
         print(f"Error processing persona info: {e}")

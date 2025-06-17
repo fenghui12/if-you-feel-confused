@@ -44,6 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 状态变量 ---
     let processedPersonaText = ''; // 用于在提炼和确认步骤之间传递文本
     let suggestedPersonaText = ''; // 用于在建议和确认步骤之间传递文本
+    let currentClarificationQuestion = ''; // 用于在提问流程中暂存AI的问题
 
     // --- 事件监听 ---
     chatForm.addEventListener('submit', handleFormSubmit);
@@ -62,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 重置状态
         processedPersonaText = '';
         suggestedPersonaText = '';
+        currentClarificationQuestion = '';
     }));
 
     // 设置弹窗事件
@@ -143,11 +145,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 appendMessage({ content: data.reply, role: 'assistant' });
             }
 
-            // 根据类型处理人设更新请求
-            if (data.update_type === 'question') {
-                showQuestionModal(data.update_info);
-            } else if (data.update_type === 'suggestion') {
-                showSuggestionModal(data.update_info);
+            // 根据新的API响应格式，独立处理建议和问题
+            if (data.suggestion) {
+                showSuggestionModal(data.suggestion);
+            }
+            if (data.question) {
+                showQuestionModal(data.question);
             }
 
         } catch (error) {
@@ -170,7 +173,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/api/process_persona_info', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ raw_info: rawInfo }),
+                body: JSON.stringify({ 
+                    question: currentClarificationQuestion, 
+                    answer: rawInfo 
+                }),
             });
 
             if (!response.ok) {
@@ -190,40 +196,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * 最终步骤: 处理人设更新 (适用于两种流程)
-     * @param {string} textToAdd - 要添加到人设的最终文本
+     * @param {string} updateString - 要更新或新增的人设字符串 (必须是 "Key: Value" 格式)
      */
-    async function handleConfirmPersonaUpdate(textToAdd) {
-        if (!textToAdd) return;
+    async function handleConfirmPersonaUpdate(updateString) {
+        if (!updateString) return;
 
         try {
-            // 1. 获取当前最新配置
-            const configResponse = await fetch('/api/config');
-            if (!configResponse.ok) {
-                await handleApiError(configResponse, '获取当前配置失败，无法更新人设');
-                return;
-            }
-            const currentConfig = await configResponse.json();
-
-            // 2. 在现有配置上追加新的人设信息
-            currentConfig.base_persona += `\n- ${textToAdd}`;
-
-            // 3. 将更新后的完整配置保存回去
-            const updateResponse = await fetch('/api/config', {
+            const response = await fetch('/api/persona/update', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(currentConfig)
+                body: JSON.stringify({ update_string: updateString })
             });
 
-            if (!updateResponse.ok) {
-                await handleApiError(updateResponse, '保存更新后的人设失败');
+            if (!response.ok) {
+                await handleApiError(response, '保存更新后的人设失败');
                 return;
             }
+            
+            // 可选: 可以在 data.new_persona 中获取更新后完整的人设
+            // const data = await response.json(); 
 
             modal.style.display = 'none';
             // 重置所有相关状态
             personaInput.value = '';
             processedPersonaText = '';
             suggestedPersonaText = '';
+            currentClarificationQuestion = '';
             
             appendMessage({ content: '谢谢你！你的信息已更新，现在我更了解你了。', role: 'assistant' });
 
@@ -375,21 +373,23 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} question - AI提出的问题
      */
     function showQuestionModal(question) {
+        // 暂存当前问题，用于后续处理
+        currentClarificationQuestion = question;
+        
+        // 设置弹窗内容并显示
         modalQuestionText.textContent = question;
-        showQuestionView(); // 确保显示的是初始提问视图
+        showQuestionView(); // 确保显示的是提问视图
         modal.style.display = 'flex';
         personaInput.focus();
     }
 
     /**
      * 显示建议弹窗 (用于 'suggestion' 类型)
-     * @param {string} suggestion - AI提出的建议文本
+     * @param {string} suggestion - AI提出的建议文本, 现在应该是纯粹的 "Key: Value"
      */
     function showSuggestionModal(suggestion) {
-        // 从建议文本中提取出要添加的具体人设
-        // 例如，从 "我发现您...是否将"感情状况：恋爱中"...？" 提取 "感情状况：恋爱中"
-        const match = suggestion.match(/"([^"]+)"/);
-        suggestedPersonaText = match ? match[1] : suggestion; // 如果匹配失败，就用整个建议作为后备
+        // AI返回的已经是干净的 "Key: Value"，直接使用
+        suggestedPersonaText = suggestion; 
 
         suggestionTextContent.textContent = suggestedPersonaText;
         showSuggestionView();
